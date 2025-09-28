@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Luxury Pomodoro</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@200;300;400&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        /* Custom font for numbers - geometric style */
+        @font-face {
+            font-family: 'Geometric';
+            src: local('DM Mono'), local('Manrope');
+        }
+
+        body {
+            font-family: 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #000;
+            color: #fff;
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* Background with noise texture */
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                radial-gradient(ellipse at center, rgba(255,255,255,0.03) 0%, transparent 70%),
+                linear-gradient(180deg, #000 0%, #0a0a0a 100%);
+            pointer-events: none;
+        }
+
+        body::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.02;
+            background-image: 
+                repeating-linear-gradient(45deg, transparent, transparent 2px, rgba(255,255,255,.03) 2px, rgba(255,255,255,.03) 4px);
+            pointer-events: none;
+            mix-blend-mode: overlay;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Mode indicator */
+        .mode-indicator {
+            position: absolute;
+            top: 10vh;
+            font-size: 13px;
+            font-weight: 300;
+            letter-spacing: 5px;
+            text-transform: uppercase;
+            opacity: 0.5;
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .mode-indicator.focus {
+            color: #ff4757;
+            text-shadow: 0 0 20px rgba(255, 71, 87, 0.5);
+        }
+
+        .mode-indicator.break {
+            color: #54a0ff;
+            text-shadow: 0 0 20px rgba(84, 160, 255, 0.5);
+        }
+
+        .mode-indicator.recharge {
+            color: #ffd700;
+            text-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+        }
+
+        /* Timer display with geometric font style */
+        .timer-wrapper {
+            position: relative;
+            transform-style: preserve-3d;
+            perspective: 1000px;
+        }
+
+        .timer {
+            font-family: 'DM Mono', monospace;
+            font-size: clamp(140px, 22vw, 320px);
+            font-weight: 300;
+            letter-spacing: -0.05em;
+            font-variant-numeric: tabular-nums;
+            position: relative;
+            animation: glow-pulse 4s ease-in-out infinite;
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+            
+            /* Make numbers more geometric/circular */
+            font-feature-settings: "tnum" 1;
+            text-rendering: geometricPrecision;
+        }
+
+        /* Custom number styling for NDot-like appearance */
+        .timer .digit {
+            display: inline-block;
+            position: relative;
+            margin: 0 -0.02em;
+        }
+
+        .timer .colon {
+            display: inline-block;
+            margin: 0 0.1em;
+            opacity: 0.6;
+            font-weight: 200;
+            transform: translateY(-0.05em);
+        }
+
+        @keyframes glow-pulse {
+            0%, 100% { 
+                opacity: 0.85;
+                filter: blur(0px);
+                text-shadow: 
+                    0 0 40px rgba(255, 255, 255, 0.1),
+                    0 0 80px rgba(255, 255, 255, 0.05);
+            }
+            50% { 
+                opacity: 1;
+                filter: blur(0.3px);
+                text-shadow: 
+                    0 0 60px rgba(255, 255, 255, 0.15),
+                    0 0 120px rgba(255, 255, 255, 0.08);
+            }
+        }
+
+        /* Progress ring */
+        .progress-ring {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: min(85vw, 650px);
+            height: min(85vw, 650px);
+            pointer-events: none;
+        }
+
+        .progress-ring svg {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+        }
+
+        .progress-ring circle {
+            fill: none;
+            stroke-width: 0.5;
+            stroke-linecap: round;
+            transition: stroke-dashoffset 1s linear;
+        }
+
+        .progress-bg {
+            stroke: rgba(255, 255, 255, 0.03);
+        }
+
+        .progress-fill {
+            stroke: #ff4757;
+            /* Circumference of r=300 is 2*PI*300 ≈ 1884.95 */
+            stroke-dasharray: 1885; 
+            stroke-dashoffset: 1885;
+            filter: drop-shadow(0 0 15px currentColor);
+            transition: stroke 0.6s ease;
+        }
+
+        .break .progress-fill {
+            stroke: #54a0ff;
+        }
+
+        .recharge .progress-fill {
+            stroke: #ffd700;
+        }
+
+        /* Controls */
+        .controls {
+            position: absolute;
+            bottom: 10vh;
+            display: flex;
+            gap: 40px;
+            z-index: 10;
+        }
+
+        button {
+            background: none;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            color: rgba(255, 255, 255, 0.7);
+            padding: 18px 36px;
+            font-size: 11px;
+            font-weight: 400;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            cursor: pointer;
+            border-radius: 50px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            font-family: 'Manrope', sans-serif;
+        }
+
+        button::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            background: rgba(255, 255, 255, 0.08);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        button:hover {
+            border-color: rgba(255, 255, 255, 0.2);
+            color: rgba(255, 255, 255, 0.95);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 40px rgba(255, 255, 255, 0.08);
+        }
+
+        button:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        /* Mode selector */
+        .mode-selector {
+            position: absolute;
+            top: 50%;
+            right: 5vw;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .mode-btn {
+            background: none;
+            border: none;
+            color: rgba(255, 255, 255, 0.25);
+            font-size: 10px;
+            font-weight: 400;
+            letter-spacing: 2px;
+            cursor: pointer;
+            padding: 12px;
+            transition: all 0.3s ease;
+            position: relative;
+            font-family: 'Manrope', sans-serif;
+            text-transform: uppercase;
+        }
+
+        .mode-btn::before {
+            content: '';
+            position: absolute;
+            left: -24px;
+            top: 50%;
+            width: 12px;
+            height: 1px;
+            background: currentColor;
+            transform: translateY(-50%) scaleX(0);
+            transform-origin: right;
+            transition: transform 0.3s ease;
+        }
+
+        .mode-btn:hover {
+            color: rgba(255, 255, 255, 0.5);
+        }
+
+        .mode-btn.active {
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .mode-btn.active::before {
+            transform: translateY(-50%) scaleX(1);
+        }
+
+        /* Ambient glow effect */
+        .ambient-glow {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 900px;
+            height: 900px;
+            background: radial-gradient(circle, rgba(255, 71, 87, 0.08) 0%, transparent 70%);
+            filter: blur(120px);
+            pointer-events: none;
+            transition: all 1s ease;
+            animation: ambient-rotate 30s linear infinite;
+        }
+
+        @keyframes ambient-rotate {
+            from { transform: translate(-50%, -50%) rotate(0deg) scale(1); }
+            50% { transform: translate(-50%, -50%) rotate(180deg) scale(1.1); }
+            to { transform: translate(-50%, -50%) rotate(360deg) scale(1); }
+        }
+
+        .break .ambient-glow {
+            background: radial-gradient(circle, rgba(84, 160, 255, 0.08) 0%, transparent 70%);
+        }
+
+        .recharge .ambient-glow {
+            background: radial-gradient(circle, rgba(255, 215, 0, 0.08) 0%, transparent 70%);
+        }
+
+        /* Fade transitions */
+        .fade-enter {
+            opacity: 0;
+            transform: scale(0.95);
+        }
+
+        .fade-enter-active {
+            opacity: 1;
+            transform: scale(1);
+            transition: all 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* Additional geometric number styling */
+        @supports (font-variation-settings: normal) {
+            .timer {
+                font-variation-settings: "wght" 300;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="ambient-glow"></div>
+    
+    <div class="container">
+        <div class="mode-indicator focus">FOCUS</div>
+        
+        <div class="timer-wrapper">
+            <div class="progress-ring">
+                <svg>
+                    <!-- Using r=300 for calculation. Circumference is approx 1885 -->
+                    <circle class="progress-bg" cx="50%" cy="50%" r="300"></circle>
+                    <circle class="progress-fill" cx="50%" cy="50%" r="300"></circle>
+                </svg>
+            </div>
+            <div class="timer" id="timer">
+                <span class="digit">2</span><span class="digit">5</span><span class="colon">:</span><span class="digit">0</span><span class="digit">0</span>
+            </div>
+        </div>
+        
+        <div class="controls">
+            <button id="startBtn">START</button>
+            <button id="resetBtn">RESET</button>
+        </div>
+        
+        <div class="mode-selector">
+            <button class="mode-btn active" data-mode="focus" data-time="25">FOCUS</button>
+            <button class="mode-btn" data-mode="break" data-time="5">BREAK</button>
+            <button class="mode-btn" data-mode="recharge" data-time="50">RECHARGE</button>
+        </div>
+    </div>
+
+    <script>
+        let timeLeft = 25 * 60;
+        let totalTime = 25 * 60;
+        let isRunning = false;
+        let interval = null;
+        let currentMode = 'focus';
+
+        const timerEl = document.getElementById('timer');
+        const startBtn = document.getElementById('startBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const modeIndicator = document.querySelector('.mode-indicator');
+        const progressFill = document.querySelector('.progress-fill');
+        const container = document.querySelector('.container');
+        const modeBtns = document.querySelectorAll('.mode-btn');
+        const CIRCUMFERENCE = 1885; // Based on r=300 in CSS/SVG
+
+        function updateTimer() {
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            
+            // Format with individual digit spans for better control
+            const formattedTime = `<span class="digit">${Math.floor(minutes/10)}</span><span class="digit">${minutes%10}</span><span class="colon">:</span><span class="digit">${Math.floor(seconds/10)}</span><span class="digit">${seconds%10}</span>`;
+            timerEl.innerHTML = formattedTime;
+            
+            // Update progress ring
+            const progress = (totalTime - timeLeft) / totalTime;
+            const offset = CIRCUMFERENCE - (progress * CIRCUMFERENCE);
+            progressFill.style.strokeDashoffset = offset;
+        }
+
+        function setMode(mode, minutes) {
+            currentMode = mode;
+            totalTime = minutes * 60;
+            timeLeft = totalTime;
+            
+            // Update UI classes
+            document.body.className = mode;
+            modeIndicator.className = `mode-indicator ${mode}`;
+            modeIndicator.textContent = mode.toUpperCase();
+            
+            // Update active mode button
+            modeBtns.forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.mode === mode);
+            });
+            
+            // Reset progress display immediately
+            progressFill.style.strokeDashoffset = CIRCUMFERENCE;
+            updateTimer();
+        }
+
+        function playNotification() {
+            // Placeholder for sound effect
+            console.log(`Notification: ${currentMode.toUpperCase()} finished!`);
+            // In a real app, this would use Tone.js or a simple HTML Audio element
+        }
+
+        function startTimer() {
+            if (!isRunning) {
+                isRunning = true;
+                startBtn.textContent = 'PAUSE';
+                
+                interval = setInterval(() => {
+                    timeLeft--;
+                    updateTimer();
+                    
+                    if (timeLeft <= 0) {
+                        clearInterval(interval);
+                        isRunning = false;
+                        startBtn.textContent = 'START';
+                        
+                        // Auto-switch modes (simple sequential loop)
+                        if (currentMode === 'focus') {
+                            setMode('break', 5);
+                        } else if (currentMode === 'break') {
+                            setMode('recharge', 50);
+                        } else {
+                            setMode('focus', 25);
+                        }
+                        
+                        playNotification();
+                    }
+                }, 1000);
+            } else {
+                // Pause/Resume logic
+                clearInterval(interval);
+                isRunning = false;
+                startBtn.textContent = 'RESUME';
+            }
+        }
+
+        function resetTimer() {
+            clearInterval(interval);
+            isRunning = false;
+            startBtn.textContent = 'START';
+            
+            // Reset to the current mode's initial time
+            timeLeft = totalTime; 
+            progressFill.style.strokeDashoffset = CIRCUMFERENCE;
+            
+            updateTimer();
+        }
+
+        // --- Event Listeners ---
+        startBtn.addEventListener('click', startTimer);
+        resetBtn.addEventListener('click', resetTimer);
+
+        modeBtns.forEach(btn => {
+            btn.addEventListener('click', () => {
+                // Stop the timer if running
+                clearInterval(interval);
+                isRunning = false;
+                startBtn.textContent = 'START';
+
+                const minutes = parseInt(btn.dataset.time);
+                const mode = btn.dataset.mode;
+                setMode(mode, minutes);
+            });
+        });
+
+        // Initialize display
+        setMode('focus', 25);
+    </script>
+</body>
+</html>
